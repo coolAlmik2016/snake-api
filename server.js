@@ -24,6 +24,18 @@ const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/jav
 const rate=new Map();function limited(id){const t=Date.now();let r=rate.get(id);if(!r||t-r.since>60000){r={since:t,count:0};rate.set(id,r)}return ++r.count>80}
 const server=http.createServer(async(req,res)=>{
  try{
+ const origin=req.headers.origin;
+ const allowedOrigin='https://coolalmik2016.github.io';
+ if(origin===allowedOrigin && req.url.startsWith('/api/')){
+   res.setHeader('Access-Control-Allow-Origin',allowedOrigin);
+   res.setHeader('Access-Control-Allow-Methods','GET, POST, PUT, OPTIONS');
+   res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');
+   res.setHeader('Vary','Origin');
+ }
+ if(req.method==='OPTIONS'){
+   if(origin!==allowedOrigin || !req.url.startsWith('/api/'))return json(res,403,{ok:false,error:{code:'forbidden'}});
+   res.writeHead(204);return res.end();
+ }
  const url=new URL(req.url,'http://localhost');
  if(req.method==='GET'&&url.pathname==='/health')return json(res,200,{ok:true,service:'snake-api'});
  if(url.pathname.startsWith('/api/')){
