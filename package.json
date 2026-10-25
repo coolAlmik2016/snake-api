@@ -1,1 +1,15 @@
-{"name":"snake-huevo-server-demo","private":true,"version":"0.1.0","scripts":{"start":"node server.js","test":"node --check server.js && node --check huevo-api.js && node test-huevo-auth.js && node test-huevo-api.js"},"engines":{"node":">=20"}}
+{
+  "name": "snake-huevo-server-demo",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --check server.js && node --check database.js && node --check run-proof.js && node --check huevo-api.js && node test-huevo-auth.js && node test-huevo-api.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}
