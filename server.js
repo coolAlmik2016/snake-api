@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {verifyLaunch,issueSession,verifySession}=require('./huevo-auth');
-const {apiRequest,getPublicUser,listFriendsServerOnly}=require('./huevo-api');
+const {apiRequest,getPublicUser,listFriendsServerOnly,createDonationIntent,getDonationIntent}=require('./huevo-api');
 const {createRun,verifyRun}=require('./run-proof');
 const {initialize,persist:saveDatabase}=require('./database');
 const economy=require('./economy');
@@ -71,10 +71,51 @@ const server=http.createServer(async(req,res)=>{
       try{
         const wallet=await apiRequest('GET','/wallet');
         // Do not expose application wallet balance to arbitrary players.
-        return json(res,200,{ok:true,frozen:wallet.frozen===true,paymentsConfigured:false,mode:session.mode});
+        return json(res,200,{ok:true,frozen:wallet.frozen===true,paymentsConfigured:true,realDonationsEnabled:session.mode==='live'&&process.env.HUEVO_REAL_DONATIONS_ENABLED==='true',mode:session.mode});
       }catch(err){
         console.warn('huEVO wallet status unavailable:',err.code||err.message);
         return json(res,502,{ok:false,error:{code:'wallet_unavailable',message:'Статус кошелька huEVO сейчас недоступен'}});
+      }
+    }
+    if(req.method==='POST'&&url.pathname==='/api/huevo/donations/create'){
+      const b=await body(req);
+      const allowed=[5,10,25,50,100];
+      if(!Number.isInteger(b.amount)||!allowed.includes(b.amount))
+        return json(res,400,{ok:false,error:{code:'invalid_amount',message:'Выберите предложенную сумму'}});
+      const test=session.mode!=='live'||process.env.HUEVO_REAL_DONATIONS_ENABLED!=='true';
+      try{
+        // Amount and player identity come from trusted server state, not arbitrary browser input.
+        const intent=await createDonationIntent({userId:Number(session.id),amount:b.amount,test,idempotencyKey:'snake-'+crypto.randomUUID()});
+        if(!intent.ok||!/^pi_[A-Za-z0-9_-]{5,100}$/.test(intent.intent_id||'')||intent.amount!==b.amount||String(intent.user_id)!==session.id||intent.test!==test)
+          throw Error('Unexpected huEVO payment response');
+        await updatePlayer(()=>{
+          player.donations ||= {};
+          player.donations[intent.intent_id]={amount:b.amount,test,status:intent.status,createdAt:Date.now()};
+          const entries=Object.entries(player.donations).sort((a,b)=>b[1].createdAt-a[1].createdAt).slice(0,30);
+          player.donations=Object.fromEntries(entries);
+        });
+        return json(res,200,{ok:true,intent_id:intent.intent_id,amount:b.amount,status:intent.status,test});
+      }catch(e){
+        console.error('Donation intent error:',e.code||e.message);
+        return json(res,e.retryAfter?429:502,{ok:false,error:{code:e.code||'payment_unavailable',message:'Не удалось создать платёж. Попробуйте позже.'}});
+      }
+    }
+    const donationMatch=/^\/api\/huevo\/donations\/(pi_[A-Za-z0-9_-]{5,100})$/.exec(url.pathname);
+    if(req.method==='GET'&&donationMatch){
+      const intentId=donationMatch[1];
+      const record=player.donations?.[intentId];
+      if(!record)return json(res,404,{ok:false,error:{code:'not_found',message:'Платёж не найден'}});
+      try{
+        const result=await getDonationIntent(intentId);
+        if(String(result.user_id)!==session.id||result.amount!==record.amount||result.test!==record.test)
+          throw Error('Payment details mismatch');
+        if(!['pending','succeeded','failed','cancelled','expired'].includes(result.status))
+          throw Error('Unknown payment status');
+        await updatePlayer(()=>{if(player.donations?.[intentId])player.donations[intentId].status=result.status});
+        return json(res,200,{ok:true,intent_id:intentId,status:result.status,amount:record.amount,test:record.test,error:result.error??null});
+      }catch(e){
+        console.error('Donation status verification:',e.code||e.message);
+        return json(res,502,{ok:false,error:{code:'status_unavailable',message:'Не удалось проверить оплату. Повторите проверку позже.'}});
       }
     }
     const profileMatch=/^\/api\/huevo\/public-profile\/(\d+)$/.exec(url.pathname);
