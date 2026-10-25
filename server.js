@@ -113,7 +113,7 @@ const server=http.createServer(async(req,res)=>{
       const result=await updatePlayer(()=>economy.award(player,check.score));
       return json(res,200,{ok:true,best:player.best,verified:true,apples:result.apples,inventory:result.inventory});
     }
-    if(req.method==='GET'&&url.pathname==='/api/huevo/me')return json(res,200,{ok:true,user:{id:session.id,mode:session.mode,name:player.name,username:player.username,avatar:player.avatar,best:player.best},save:player.save,inventory:economy.state(player)});
+    if(req.method==='GET'&&url.pathname==='/api/huevo/me')return json(res,200,{ok:true,user:{id:session.id,mode:session.mode,name:player.name,username:player.username,avatar:player.avatar,best:player.best},save:player.save,inventory:economy.state(player),canImportLegacy:!player.legacyMigrated});
     if(req.method==='GET'&&url.pathname==='/api/huevo/leaderboard')return json(res,200,{ok:true,mode:session.mode,verifiedScores:true,players:Object.entries(db.huevoPlayers).filter(([k])=>k.startsWith(session.mode+':')).sort((a,b)=>b[1].best-a[1].best).slice(0,20).map(([k,v])=>({id:k.slice(session.mode.length+1),name:v.name,avatar:v.avatar,score:v.best}))});
     if(req.method==='PUT'&&url.pathname==='/api/huevo/save')return json(res,410,{ok:false,error:{code:'readonly_inventory',message:'Сохранения синхронизируются автоматически'}});
     if(req.method==='POST'&&url.pathname==='/api/huevo/inventory/import'){
