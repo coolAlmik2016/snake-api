@@ -8,11 +8,14 @@ const {verifyLaunch,issueSession,verifySession}=require('./huevo-auth');
 const {getPublicUser,listFriendsServerOnly}=require('./huevo-api');
 const {createRun,verifyRun}=require('./run-proof');
 const {initialize,persist:saveDatabase}=require('./database');
+const economy=require('./economy');
 const PORT=Number(process.env.PORT||3000);
 const DATA=process.env.DATA_FILE||path.join(__dirname,'data.json');
 const PUBLIC=path.join(__dirname,'public');
 let db={players:{},huevoPlayers:{}};
 const sessions=new Map(); // temporary guest sessions; stable cookie allows re-entry during this process only
+let mutations=Promise.resolve();
+async function updatePlayer(callback){const job=mutations.then(async()=>{const result=await callback();await persist();return result});mutations=job.catch(err=>console.error('State mutation failed:',err.message));return job}
 async function persist(){await saveDatabase(db)}
 function json(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(body)}
 function getCookie(req,name){const items=(req.headers.cookie||'').split(';').map(s=>s.trim());return items.find(s=>s.startsWith(name+'='))?.slice(name.length+1)}
@@ -47,8 +50,11 @@ const server=http.createServer(async(req,res)=>{
         const player=verifyLaunch(b.query);
         if(!player)return json(res,401,{ok:false,error:{code:'invalid_launch',message:'Неверная или устаревшая подпись huEVO'}});
         const key=player.mode+':'+player.id;
-        const prev=db.huevoPlayers[key]||{best:0,save:null};
-        db.huevoPlayers[key]={...prev,name:player.displayName||player.username||'Игрок',username:player.username,avatar:player.avatar};await persist();
+        await updatePlayer(()=>{
+          const prev=db.huevoPlayers[key]||{best:0,save:null};
+          db.huevoPlayers[key]={...prev,name:player.displayName||player.username||'Игрок',username:player.username,avatar:player.avatar};
+          economy.ensure(db.huevoPlayers[key],!Boolean(db.huevoPlayers[key].createdBeforeUpgrade) && !Boolean(db.huevoPlayers[key].legacyMigrated) && !Boolean(db.huevoPlayers[key].save) && !Boolean(db.huevoPlayers[key].inventory) && !Boolean(db.huevoPlayers[key].best));
+        });
         return json(res,200,{ok:true,token:issueSession(player),user:{id:player.id,mode:player.mode,name:db.huevoPlayers[key].name,avatar:player.avatar}});
       })();
       return json(res,429,{ok:false,error:{code:'rate_limited',message:'Повторите вход позже'}});
@@ -103,14 +109,26 @@ const server=http.createServer(async(req,res)=>{
       const b=await body(req);
       const check=verifyRun(key,b);
       if(!check.ok)return json(res,400,{ok:false,error:{code:'invalid_run',message:check.reason}});
-      player.best=Math.max(player.best,check.score);
-      await persist();
-      return json(res,200,{ok:true,best:player.best,verified:true});
+      const result=await updatePlayer(()=>economy.award(player,check.score));
+      return json(res,200,{ok:true,best:player.best,verified:true,apples:result.apples,inventory:result.inventory});
     }
-    if(req.method==='GET'&&url.pathname==='/api/huevo/me')return json(res,200,{ok:true,user:{id:session.id,mode:session.mode,name:player.name,username:player.username,avatar:player.avatar,best:player.best},save:player.save});
+    if(req.method==='GET'&&url.pathname==='/api/huevo/me')return json(res,200,{ok:true,user:{id:session.id,mode:session.mode,name:player.name,username:player.username,avatar:player.avatar,best:player.best},save:player.save,inventory:economy.state(player)});
     if(req.method==='GET'&&url.pathname==='/api/huevo/leaderboard')return json(res,200,{ok:true,mode:session.mode,verifiedScores:true,players:Object.entries(db.huevoPlayers).filter(([k])=>k.startsWith(session.mode+':')).sort((a,b)=>b[1].best-a[1].best).slice(0,20).map(([k,v])=>({id:k.slice(session.mode.length+1),name:v.name,avatar:v.avatar,score:v.best}))});
-    if(req.method==='PUT'&&url.pathname==='/api/huevo/save'){
-      const b=await body(req);player.save=cleanSave(b.save);await persist();return json(res,200,{ok:true});
+    if(req.method==='PUT'&&url.pathname==='/api/huevo/save')return json(res,410,{ok:false,error:{code:'readonly_inventory',message:'Сохранения синхронизируются автоматически'}});
+    if(req.method==='POST'&&url.pathname==='/api/huevo/inventory/import'){
+      const b=await body(req);
+      const result=await updatePlayer(()=>economy.importOld(player,b.save));
+      return json(res,result.ok?200:409,result.ok?result:{ok:false,error:{code:result.code,message:result.message}});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/huevo/inventory/buy'){
+      const b=await body(req);
+      const result=await updatePlayer(()=>economy.buy(player,b.skinId));
+      return json(res,result.ok?200:400,result.ok?result:{ok:false,error:{code:result.code,message:result.message}});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/huevo/inventory/select'){
+      const b=await body(req);
+      const result=await updatePlayer(()=>economy.select(player,b.skinId,b.color));
+      return json(res,result.ok?200:400,result.ok?result:{ok:false,error:{code:result.code,message:result.message}});
     }
     if(req.method==='POST'&&url.pathname==='/api/huevo/score')return json(res,410,{ok:false,error:{code:'use_verified_run',message:'Используйте проверяемую игровую партию'}});
     return json(res,404,{ok:false,error:{code:'not_found',message:'Метод не найден'}});
