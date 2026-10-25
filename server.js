@@ -122,7 +122,7 @@ const server=http.createServer(async(req,res)=>{
     // Owner-only read/preview panel; intentionally does not execute any wallet transfer.
     if(url.pathname.startsWith('/api/huevo/owner/')){
       const ownerId=String(process.env.HUEVO_OWNER_USER_ID||'');
-      if(!/^\\d+$/.test(ownerId)||ownerId==='0'||session.mode!=='live'||session.id!==ownerId)
+      if(!/^\d+$/.test(ownerId)||ownerId==='0'||session.mode!=='live'||session.id!==ownerId)
         return json(res,403,{ok:false,error:{code:'not_owner',message:'Доступ только владельцу приложения'}});
       if(req.method==='GET'&&url.pathname==='/api/huevo/owner/summary'){
         try{
