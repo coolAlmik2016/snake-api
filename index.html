@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#202225">
+<meta name="description" content="Змейка huEVO — игра со звуками и магазином цветов">
+<title>Змейка huEVO</title>
+<style>
+:root{color-scheme:dark;--surface:#202225;--surface2:#282b30;--line:#393d44;--muted:#a4b4cd;--text:#f4f6fa;--blue:#779cc5;--panel:#1d2024;--board-max:620px}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}body{background:#191b1e;color:var(--text);font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+button{font:inherit;cursor:pointer;touch-action:manipulation}button:focus-visible,canvas:focus-visible{outline:2px solid #8dbbea;outline-offset:2px}
+.shell{width:min(100%,1180px);margin:0 auto;padding:12px 14px 16px;min-width:0;display:grid;grid-template-rows:auto 1fr;gap:12px}
+.shop{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px 11px;box-shadow:0 0 0 1px rgba(255,255,255,.02) inset}
+.shop-top{display:flex;align-items:center;gap:10px;margin-bottom:9px;min-width:0}
+.shop-title{font-weight:700;font-size:13px;white-space:nowrap}
+.shop-spacer{flex:1}.wallet{display:flex;align-items:center;gap:5px;border:1px solid #444b54;background:#2c3036;border-radius:6px;padding:5px 10px;color:#b4c2d8;font-size:12px;white-space:nowrap}
+.wallet strong{color:#fff;font-size:15px;font-variant-numeric:tabular-nums}
+.icon-btn{border:1px solid #444b54;background:#2c3036;border-radius:6px;color:#c6d6eb;padding:5px 9px;font-size:12px;white-space:nowrap;min-height:32px}.icon-btn:hover{background:#373d45}
+.shop-list{display:flex;gap:8px;overflow-x:auto;padding:1px 0 4px;scrollbar-color:#505863 transparent;scrollbar-width:thin}
+.skin{flex:0 0 auto;display:flex;gap:8px;align-items:center;min-width:120px;max-width:155px;border:1px solid #383e46;border-radius:7px;background:#282c31;padding:7px 9px;min-height:52px}
+.skin.selected{border-color:#789dc4;background:#303b47}
+.skin-dot{width:19px;height:19px;border-radius:50%;border:1px solid #ffffff66;flex-shrink:0}
+.skin-name{display:block;color:#ecf1f8;font-size:11px;font-weight:600;line-height:1.2;white-space:nowrap}
+.skin-note{display:block;color:#a7b5c7;font-size:10px;font-weight:400;margin-top:2px}
+.skin-btn{border:1px solid #4c5866;border-radius:5px;background:#3a434d;color:#e4ecf8;padding:4px 7px;font-size:10px;min-height:26px;white-space:nowrap;margin-left:auto}
+.skin-btn:disabled{opacity:.66;cursor:default}.skin-btn:not(:disabled):hover{background:#4d6075}
+.arena{display:grid;grid-template-rows:minmax(0,1fr) auto auto auto;justify-items:center;align-content:center;gap:10px;min-height:calc(100vh - 132px);min-height:calc(100dvh - 132px)}
+.board-shell{position:relative;width:min(var(--board-max),calc(100vh - 265px),calc(100dvh - 265px),78vw);aspect-ratio:1/1;background:#162025;border:1px solid #46515b;border-radius:8px;overflow:hidden;box-shadow:0 0 0 4px #23272b}
+#board{display:block;width:100%;height:100%;aspect-ratio:1/1;touch-action:none}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;padding:20px;background:#111a20ec;text-align:center}
+.overlay[hidden]{display:none}.overlay-icon{font-size:31px;line-height:1}.overlay h2{font-size:28px;letter-spacing:-.5px;margin:0}.overlay p{font-size:13px;color:#b4c3d1;margin:0}
+.btn{border:1px solid #505963;background:#343a42;border-radius:6px;color:#edf2fa;min-height:38px;padding:7px 16px;font-weight:600}.btn:hover{background:#414a55}.btn:disabled{opacity:.5;cursor:default}.btn-primary{background:#6087b0;border-color:#7098c0;color:white}.btn-primary:hover{background:#7099c1}
+.scorebar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:min(100%,var(--board-max));gap:8px}
+.score{display:flex;align-items:center;justify-content:center;gap:9px;min-width:0;min-height:48px;border:1px solid #3a3e44;background:#282b30;border-radius:7px;padding:9px 8px}
+.score span{font-size:11px;color:#9daec4;white-space:nowrap}.score strong{font-size:22px;font-variant-numeric:tabular-nums;line-height:1.1}.score strong.best{color:#9dc5ed}
+.bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;width:min(100%,var(--board-max));flex-wrap:wrap;background:var(--panel);border:1px solid #333840;border-radius:8px;padding:10px 12px}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;color:#a6b4c8}.status strong{color:#dbe4ef;font-weight:500}.bullet{width:7px;height:7px;border-radius:50%;background:#85909e;display:inline-block}.bullet.live{background:#7cceae}
+.actions{display:flex;gap:7px;flex-wrap:wrap}.actions .btn{min-height:34px;padding:5px 12px;font-size:12px}
+.level-line,.bar,.howto,.controls-widget,.shop-hint,.app-foot{display:none}
+.hint{font-size:11px;color:#8192a9;white-space:nowrap}
+.pad{display:none;grid-template-columns:repeat(3,50px);gap:6px;justify-content:center;margin:2px auto 0}
+.pad button{height:42px;border:1px solid #4a5664;border-radius:6px;background:#303943;color:#d5e5f8;font-size:18px;touch-action:manipulation;user-select:none}
+.pad button:active{background:#607f9e}.pad .empty{visibility:hidden}
+@media (min-width:900px) and (min-aspect-ratio:16/10){
+  .shell{padding:12px 18px 18px;gap:14px}
+  .shop{padding:10px 14px 12px}
+  .shop-list{gap:10px}
+  .arena{gap:12px;min-height:calc(100vh - 120px);min-height:calc(100dvh - 120px)}
+  .board-shell{width:min(640px,calc(100vh - 250px),calc(100dvh - 250px),62vw)}
+  .scorebar,.bottom{width:min(640px,62vw)}
+}
+@media(max-width:760px){.shell{padding:8px}.shop{padding:8px}.shop-list{gap:6px}.arena{min-height:auto;padding-bottom:4px}.board-shell{width:min(100%,calc(100vw - 24px));box-shadow:none;border-radius:6px}.scorebar,.bottom{width:100%}.bottom{justify-content:center}.hint{display:none}.pad{display:grid}.score{gap:5px}.score span{font-size:10px}.score strong{font-size:19px}}
+@media(max-width:420px){.shop-top{flex-wrap:wrap}.shop-spacer{display:none}.wallet{order:3}.icon-btn{margin-left:auto}.score{flex-direction:column;gap:2px;min-height:56px}.score strong{font-size:18px}.bottom{padding:9px 10px}.actions{width:100%;justify-content:center}}
+@media(max-width:370px){.shop-title{font-size:12px}.icon-btn{font-size:11px;padding:4px 6px}.wallet{padding:4px 6px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<style>
+.community{width:min(100%,700px);margin:16px auto 0;padding:14px;background:#202225;border:1px solid #393d44;border-radius:8px;color:#eaf0f8}
+.community header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}.community header span{font-size:11px;color:#9cb8d0}
+.community-profile{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}.community-profile small{color:#a8bfd2}
+.community button{border:1px solid #455465;border-radius:6px;background:#334458;color:white;padding:7px 11px}
+.community .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.community .tabs button.current{background:#597ea8}
+.community-content{background:#181d23;border-radius:6px;min-height:65px;padding:10px;line-height:1.65}
+.community-content ol{padding-left:24px;margin:4px 0}.community-content li{padding:4px 0;border-bottom:1px solid #303840}
+.community-content input{padding:8px;background:#222d37;color:white;border:1px solid #455465;border-radius:5px;max-width:150px}
+.community-content .muted{font-size:11px;color:#9db0c6}
+</style>
+<meta name="referrer" content="no-referrer">
+<style>.huevo-profile{margin:10px auto;max-width:650px;padding:10px;border:1px solid #3b4c5b;border-radius:9px;background:#20282f;color:#d4e5f5;font:12px system-ui,sans-serif}.huevo-profile[hidden]{display:none}.huevo-profile strong{font-size:14px}.huevo-profile .ranking{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.huevo-profile .rank-card{border-radius:5px;background:#2c3743;padding:5px 8px}.huevo-profile .explain{opacity:.7;font-size:11px;margin-top:6px}</style>
+<script src="https://huevo.su/static/js/huevo-apps-v1.js" data-origins="huevo.departament.site"></script>
+</head>
+<body>
+<section id="huevo-profile" class="huevo-profile" hidden aria-live="polite"><strong id="huevo-player"></strong><div id="huevo-ranking" class="ranking"></div><div class="explain">Рейтинг пока тестовый: результаты не защищены от подделки.</div></section>
+<section id="huevo-sdk-panel" hidden aria-label="Функции huEVO" style="max-width:680px;margin:10px auto;padding:10px;border:1px solid #455465;border-radius:8px;background:#20272f;color:#e3edf7">
+ <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+  <strong>huEVO</strong>
+  <button type="button" id="sdk-share" class="btn">Поделиться игрой</button>
+  <button type="button" id="sdk-pick" class="btn">Выбрать друзей</button>
+  <button type="button" id="sdk-friends" class="btn">Рейтинг друзей huEVO</button>
+  <button type="button" id="sdk-fullscreen" class="btn">Полный экран</button>
+ </div>
+ <div id="sdk-feedback" role="status" style="padding-top:8px;color:#b6c9dd;font-size:12px"></div>
+ <ol id="sdk-picked" style="margin:4px 0 0;padding-left:25px"></ol>
+</section>
+<main class="shell" aria-label="Змейка huEVO">
+  <section class="shop" aria-label="Магазин цветов">
+    <div class="shop-top">
+      <span class="shop-title">🎨 Цвет змейки</span>
+      <span class="shop-spacer"></span>
+      <div class="wallet" title="Заработанные яблоки">🍎 <strong id="wallet">0</strong></div>
+      <button type="button" id="sound" class="icon-btn" aria-pressed="true" aria-label="Включить или выключить звуки">♫ Включены</button>
+    </div>
+    <div id="shop" class="shop-list" aria-label="Доступные цвета"></div>
+  </section>
+  <section class="arena" aria-label="Игровое поле и результаты">
+    <div class="board-shell">
+      <canvas id="board" width="480" height="480" tabindex="0" aria-label="Поле игры Змейка"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-icon" aria-hidden="true">▦</div>
+        <h2 id="message">Змейка huEVO</h2>
+        <p id="subtitle">Собирай яблоки и открывай цвета</p>
+        <button type="button" id="start" class="btn btn-primary">Играть</button>
+      </div>
+    </div>
+    <div class="scorebar" aria-label="Результаты">
+      <div class="score"><span>Счёт</span><strong id="score">0</strong></div>
+      <div class="score"><span>Рекорд</span><strong id="best" class="best">0</strong></div>
+      <div class="score"><span>Уровень</span><strong id="level">1</strong></div>
+    </div>
+    <div class="bottom">
+      <div class="status"><i id="indicator" class="bullet"></i><strong id="status" role="status">Не начата</strong></div>
+      <span class="hint">Стрелки / WASD / свайпы</span>
+      <div class="actions"><button type="button" id="pause" class="btn" disabled>⏸ Пауза</button><button type="button" id="restart" class="btn">↻ Заново</button></div>
+    </div>
+    <div class="pad" aria-label="Кнопки направления">
+      <span class="empty"></span><button data-dir="up" type="button" aria-label="Вверх">↑</button><span class="empty"></span>
+      <button data-dir="left" type="button" aria-label="Влево">←</button><button data-dir="down" type="button" aria-label="Вниз">↓</button><button data-dir="right" type="button" aria-label="Вправо">→</button>
+    </div>
+  </section>
+
+<section class="community" aria-label="Сообщество Snake">
+  <header><strong>Сообщество Snake</strong><span id="connection">Демонстрационный режим — без привязки huEVO</span></header>
+  <div class="community-profile"><span id="guestName">Гость</span><small id="myCode"></small><input id="guest-name-entry" aria-label="Новый ник для гостевого режима" placeholder="Новый ник" maxlength="24" style="max-width:160px;padding:7px;border-radius:5px;background:#222d37;color:white;border:1px solid #455465"> <button id="editName" type="button">Изменить ник</button></div>
+  <nav class="tabs"><button id="tabGlobal" class="current" type="button">Топ игроков</button><button id="tabFriends" type="button">Друзья</button><button id="tabSaves" type="button">Сохранения</button></nav>
+  <div id="communityContent" class="community-content" aria-live="polite">Загрузка...</div>
+</section>
+  <div class="level-line"><span id="progressText">0 / 50</span></div><div class="bar"><span id="progress"></span></div>
+</main>
+  <script>
+  (() => {
+    'use strict';
+    const N=20, CELL=24, SIZE=N*CELL, $=id=>document.getElementById(id);
+    const canvas=$('board'),ctx=canvas.getContext('2d');
+    const vectors={up:{x:0,y:-1},right:{x:1,y:0},down:{x:0,y:1},left:{x:-1,y:0}};
+    let snake,food,direction,queued,turned,score,level;
+    let playing=false,paused=false,finished=false,acc=0,last=0;
+    let best=0, wallet=0, soundOn=true, skinId='mint';
+    const skins=[
+      {id:'mint',name:'Мятный',body:'#79bba4',head:'#a5e9ca',eye:'#203b32',cost:0},
+      {id:'blue',name:'Небесный',body:'#6dace2',head:'#afdcff',eye:'#19354e',cost:2},
+      {id:'lavender',name:'Лавандовый',body:'#aa89d9',head:'#d5b9ff',eye:'#3a2854',cost:4},
+      {id:'peach',name:'Персиковый',body:'#e5a080',head:'#ffd3b8',eye:'#56382c',cost:6},
+      {id:'rose',name:'Розовый',body:'#da82af',head:'#ffd0e4',eye:'#512b40',cost:9},
+      {id:'gold',name:'Золотой',body:'#d5b65e',head:'#ffe6a0',eye:'#4d3b17',cost:12}
+    ];
+    let owned=new Set(['mint']);
+    try {
+      best=Math.max(0,Number(localStorage.getItem('huevo-snake-record'))||0);
+      wallet=Math.max(0,Math.floor(Number(localStorage.getItem('huevo-snake-apples'))||0));
+      const saved=JSON.parse(localStorage.getItem('huevo-snake-skins')||'[]');
+      if(Array.isArray(saved))for(const id of saved)if(skins.some(s=>s.id===id))owned.add(id);
+      skinId=localStorage.getItem('huevo-snake-color')||'mint';
+      if(!owned.has(skinId))skinId='mint';
+      soundOn=localStorage.getItem('huevo-snake-sound')!=='off';
+    }catch(_){/* iframe may restrict local storage */}
+    const store=(key,value)=>{try{localStorage.setItem(key,String(value))}catch(_){}};
+    $('best').textContent=best;
+    const audio={ctx:null};
+    function wakeAudio(){
+      if(!soundOn)return null;
+      try{
+        if(!audio.ctx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;audio.ctx=new AC();}
+        if(audio.ctx.state==='suspended')audio.ctx.resume().catch(()=>{});
+        return audio.ctx;
+      }catch(_){return null;}
+    }
+    // Sine waves with gentle envelopes and glides: no sharp arcade bleeps or external audio files.
+    function tone(startFreq,endFreq,duration=0.2,volume=0.055,offset=0){
+      if(!soundOn)return;
+      const ac=wakeAudio();if(!ac||ac.state==='closed')return;
+      const at=ac.currentTime+offset;
+      try{
+        const osc=ac.createOscillator(),gain=ac.createGain();
+        osc.type='sine';osc.frequency.setValueAtTime(startFreq,at);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(40,endFreq),at+duration);
+        gain.gain.setValueAtTime(0.0001,at);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0002,volume),at+0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001,at+duration);
+        osc.connect(gain);gain.connect(ac.destination);osc.start(at);osc.stop(at+duration+0.02);
+      }catch(_){}
+    }
+    function sfx(kind){
+      if(kind==='apple'){tone(490,710,.22,.06);tone(740,860,.28,.025,.07);}
+      if(kind==='select'){tone(420,580,.15,.035);}
+      if(kind==='buy'){tone(380,520,.19,.04);tone(530,790,.27,.038,.12);}
+      if(kind==='start'){tone(350,520,.20,.035);tone(460,650,.23,.03,.07);}
+      if(kind==='finish'){tone(400,300,.26,.035);tone(310,220,.36,.027,.13);}
+      if(kind==='win'){tone(480,700,.20,.04);tone(620,900,.32,.035,.13);}
+      if(kind==='pause'){tone(520,410,.15,.022);}
+    }
+    function currentSkin(){return skins.find(s=>s.id===skinId)||skins[0];}
+    function saveSkins(){store('huevo-snake-skins',JSON.stringify([...owned]));store('huevo-snake-color',skinId);}
+    function renderShop(){
+      $('wallet').textContent=wallet;
+      const container=$('shop');container.replaceChildren();
+      for(const skin of skins){
+        const row=document.createElement('div');row.className='skin'+(skinId===skin.id?' selected':'');
+        const dot=document.createElement('span');dot.className='skin-dot';dot.style.background=skin.body;
+        const info=document.createElement('span');info.className='skin-name';info.textContent=skin.name;
+        const note=document.createElement('span');note.className='skin-note';note.textContent=owned.has(skin.id)?'Открыт':skin.cost+' 🍎';info.append(note);
+        const btn=document.createElement('button');btn.type='button';btn.className='skin-btn';
+        const active=skin.id===skinId,unlocked=owned.has(skin.id);
+        btn.textContent=active?'✓':unlocked?'Выбрать':wallet>=skin.cost?'Купить':'🔒';
+        btn.disabled=active||(!unlocked&&wallet<skin.cost);
+        btn.setAttribute('aria-label',active?skin.name+' выбран':unlocked?'Выбрать '+skin.name:'Купить цвет '+skin.name+' за '+skin.cost+' яблок');
+        btn.addEventListener('click',()=>{
+          wakeAudio();
+          if(owned.has(skin.id)){skinId=skin.id;sfx('select');}
+          else if(wallet>=skin.cost){wallet-=skin.cost;owned.add(skin.id);skinId=skin.id;store('huevo-snake-apples',wallet);sfx('buy');}
+          else return;
+          saveSkins();renderShop();draw();
+        });
+        row.append(dot,info,btn);container.append(row);
+      }
+    }
+    function updateSoundButton(){
+      $('sound').textContent=soundOn?'♫ Включены':'♪ Выключены';$('sound').setAttribute('aria-pressed',String(soundOn));
+    }
+    $('sound').addEventListener('click',()=>{soundOn=!soundOn;store('huevo-snake-sound',soundOn?'on':'off');updateSoundButton();if(soundOn)sfx('select');});
+    updateSoundButton();renderShop();
+    const eq=(a,b)=>a.x===b.x&&a.y===b.y;
+    function newFood(){
+      const free=[];
+      for(let y=0;y<N;y++) for(let x=0;x<N;x++) if(!snake.some(p=>p.x===x&&p.y===y)) free.push({x,y});
+      return free.length?free[Math.floor(Math.random()*free.length)]:null;
+    }
+    function updateUI(){
+      $('score').textContent=score;$('best').textContent=best;$('level').textContent=level;
+      const progress=score%50;
+      $('progress').style.width=(progress/50*100)+'%';
+      $('progressText').textContent=progress+' / 50';
+      $('status').textContent=paused?'Пауза':playing?'В игре':finished?'Завершена':'Не начата';
+      $('indicator').classList.toggle('live',playing&&!paused);
+      $('pause').disabled=!playing;
+      $('pause').textContent=paused?'▶ Продолжить':'⏸ Пауза';
+    }
+    function showOverlay(title,subtitle,button){
+      $('message').textContent=title;$('subtitle').textContent=subtitle;$('start').textContent=button;
+      $('overlay').hidden=false;
+    }
+    function start(){
+      snake=[{x:7,y:10},{x:6,y:10},{x:5,y:10}];
+      direction=vectors.right;queued=direction;turned=false;
+      score=0;level=1;food=newFood();playing=true;paused=false;finished=false;
+      acc=0;last=0;$('overlay').hidden=true;updateUI();draw();wakeAudio();sfx('start');canvas.focus({preventScroll:true});
+    }
+    function finish(won=false){
+      playing=false;paused=false;finished=true;sfx(won?'win':'finish');updateUI();
+      showOverlay(won?'Победа!':'Игра окончена','Твой счёт: '+score+' · Рекорд: '+best,'Играть снова');
+      window.dispatchEvent(new CustomEvent('snake-score',{detail:{score}}));
+    }
+    function step(){
+      direction=queued;turned=false;
+      const head={x:snake[0].x+direction.x,y:snake[0].y+direction.y};
+      const eating=food&&eq(head,food);
+      const collidable=eating?snake:snake.slice(0,-1);
+      if(head.x<0||head.y<0||head.x>=N||head.y>=N||collidable.some(p=>eq(p,head))){finish();return;}
+      snake.unshift(head);
+      if(eating){
+        score+=10;level=1+Math.floor(score/50);
+        wallet+=1;store('huevo-snake-apples',wallet);renderShop();sfx('apple');
+        if(score>best){best=score;store('huevo-snake-record',best)}
+        food=newFood();updateUI();if(!food){finish(true);return;}
+      }else snake.pop();
+    }
+    function draw(){
+      ctx.fillStyle='#182226';ctx.fillRect(0,0,SIZE,SIZE);
+      ctx.strokeStyle='#233037';ctx.lineWidth=1;
+      for(let i=1;i<N;i++){
+        ctx.beginPath();ctx.moveTo(i*CELL+.5,0);ctx.lineTo(i*CELL+.5,SIZE);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(0,i*CELL+.5);ctx.lineTo(SIZE,i*CELL+.5);ctx.stroke();
+      }
+      if(food){
+        const x=(food.x+.5)*CELL,y=(food.y+.5)*CELL;
+        ctx.fillStyle='#eb5d67';ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#83bf8b';ctx.fillRect(x,y-11,2,5);
+        ctx.fillStyle='#ffc2c6';ctx.beginPath();ctx.arc(x-2.5,y-2.5,2,0,Math.PI*2);ctx.fill();
+      }
+      const colors=currentSkin();
+      snake.forEach((p,i)=>{
+        ctx.fillStyle=i===0?colors.head:colors.body;
+        ctx.fillRect(p.x*CELL+2,p.y*CELL+2,CELL-4,CELL-4);
+        if(i===0){
+          const baseX=p.x*CELL,baseY=p.y*CELL;
+          const eyes=direction.x!==0?[[direction.x>0?17:7,7],[direction.x>0?17:7,17]]:[[7,direction.y>0?17:7],[17,direction.y>0?17:7]];
+          ctx.fillStyle=colors.eye;eyes.forEach(([x,y])=>{ctx.beginPath();ctx.arc(baseX+x,baseY+y,2,0,Math.PI*2);ctx.fill();});
+        }
+      });
+    }
+    function tick(now){
+      if(playing&&!paused){
+        if(!last)last=now;
+        acc+=Math.min(now-last,100);
+        const delay=Math.max(65,150-(level-1)*10);
+        while(acc>=delay&&playing){step();acc-=delay;}
+        draw();
+      }
+      last=now;
+      requestAnimationFrame(tick);
+    }
+    function turn(name){
+      if(!playing||paused||turned||!vectors[name])return;
+      const v=vectors[name];
+      if(v.x===-direction.x&&v.y===-direction.y)return;
+      if(v.x===direction.x&&v.y===direction.y)return;
+      queued=v;turned=true;
+    }
+    function pause(){
+      if(!playing)return;
+      paused=!paused;acc=0;last=0;sfx('pause');
+      if(paused)showOverlay('Пауза','Игра приостановлена','Продолжить');
+      else{$('overlay').hidden=true;canvas.focus({preventScroll:true});}
+      updateUI();
+    }
+    $('start').addEventListener('click',()=>paused?pause():start());
+    $('restart').addEventListener('click',start);
+    $('pause').addEventListener('click',pause);
+    document.querySelectorAll('[data-dir]').forEach(button=>button.addEventListener('click',()=>turn(button.dataset.dir)));
+    window.addEventListener('keydown',e=>{
+      const map={ArrowUp:'up',KeyW:'up',ArrowRight:'right',KeyD:'right',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left'};
+      if(map[e.code]&&playing){e.preventDefault();turn(map[e.code]);}
+      if(e.code==='Space'&&playing){e.preventDefault();if(!e.repeat)pause();}
+    });
+    let x0=0,y0=0;
+    canvas.addEventListener('pointerdown',e=>{x0=e.clientX;y0=e.clientY;});
+    canvas.addEventListener('pointerup',e=>{
+      const dx=e.clientX-x0,dy=e.clientY-y0;
+      if(Math.max(Math.abs(dx),Math.abs(dy))<18)return;
+      turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up'));
+    });
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing&&!paused)pause();});
+    snake=[{x:7,y:10},{x:6,y:10},{x:5,y:10}];direction=vectors.right;food={x:13,y:10};score=0;level=1;
+    updateUI();draw();requestAnimationFrame(tick);
+  })();
+  </script>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+let mode='global', profile=null;
+function showNotice(msg){let n=document.getElementById('snake-notice');if(!n){n=document.createElement('div');n.id='snake-notice';n.setAttribute('role','status');n.style.cssText='position:fixed;left:12px;bottom:12px;padding:12px;background:#263848;color:white;border:1px solid #607c91;border-radius:8px;z-index:1000;max-width:calc(100% - 24px)';document.body.append(n)}n.textContent=String(msg).slice(0,250)}
+async function call(url,opts){const res=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...opts});const obj=await res.json();if(!res.ok)throw Error(obj.error||'Ошибка');return obj}
+function elm(tag,text){const node=document.createElement(tag);node.textContent=text;return node}
+async function refresh(){
+const root=$('communityContent');root.replaceChildren();
+try{
+ if(mode==='global'||mode==='friends'){
+ const data=await call(mode==='global'?'/api/leaderboard':'/api/friends');
+ const list=elm('ol','');root.append(list);
+ if(!data.players.length)root.append(elm('p','Результатов пока нет.'));
+ data.players.forEach(p=>list.append(elm('li',`${p.name}: ${p.score} очков`)));
+ if(mode==='friends'){
+ const row=elm('div','');const input=document.createElement('input');input.placeholder='Код друга';input.maxLength=10;const add=elm('button','Добавить');add.onclick=async()=>{try{await call('/api/friends',{method:'POST',body:JSON.stringify({code:input.value.trim()})});refresh()}catch(e){showNotice(e.message)}};row.append(input,add);root.append(row);
+ root.append(elm('p','Друзья добавляются по коду гостя, а не через список друзей huEVO.'));
+ }
+ root.append(elm('p','Рейтинг демонстрационный: результаты клиентов не проверены сервером.'));
+ }else{
+ const data=await call('/api/save');
+ const save=elm('button','Сохранить цвета и яблоки');const load=elm('button','Загрузить сохранение');
+ save.onclick=async()=>{try{const v={wallet:Number(localStorage.getItem('huevo-snake-apples')||0),skinId:localStorage.getItem('huevo-snake-color')||'mint',owned:JSON.parse(localStorage.getItem('huevo-snake-skins')||'["mint"]')};await call('/api/save',{method:'PUT',body:JSON.stringify({save:v})});showNotice('Сохранено в демонстрационном сервере')}catch(e){showNotice(e.message)}};
+ load.onclick=()=>{if(!data.save)return showNotice('Нет сохранения');for(const [k,v] of Object.entries({'huevo-snake-apples':data.save.wallet,'huevo-snake-color':data.save.skinId,'huevo-snake-skins':JSON.stringify(data.save.owned)})){localStorage.setItem(k,v)}showNotice('Загружено. Обнови страницу, чтобы применить цвета.');};
+ root.append(save,elm('span',' '),load,elm('p','Облачные сохранения работают только на установленном сервере, не в GitHub Pages.'));
+ }
+}catch(e){root.append(elm('p','Сервер недоступен: '+e.message))}
+}
+async function init(){try{profile=await call('/api/me');$('guestName').textContent=profile.name;$('myCode').textContent='Код: '+profile.friendCode;refresh()}catch{$('communityContent').textContent='Для рейтинга нужен запущенный Node.js сервер. На GitHub Pages доступна только сама игра.'}}
+for(const [id,value] of [['tabGlobal','global'],['tabFriends','friends'],['tabSaves','saves']])$(id).onclick=()=>{mode=value;document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('current'));$(id).classList.add('current');refresh()};
+$('editName').onclick=async()=>{const next=document.getElementById('guest-name-entry')?.value?.trim();if(!next)return showNotice('Введи ник в поле рядом с кнопкой.');try{const p=await call('/api/profile',{method:'POST',body:JSON.stringify({name:next})});$('guestName').textContent=p.name;refresh()}catch(e){showNotice(e.message)}};
+window.addEventListener('snake-score',async e=>{try{await call('/api/score',{method:'POST',body:JSON.stringify({score:e.detail.score})});if(mode==='global')refresh()}catch{}});
+init();
+})();
+</script>
+<script>
+// Integration is opt-in: ordinary offline / GitHub Pages visitors use original local game.
+(async()=>{
+  const params=new URLSearchParams(location.search);
+  if(!params.has('hu_hash'))return;
+  const query=location.search;
+  window.snakeHuevoLaunchDetected=true;
+  // Do not keep a reusable signed launch URL in browser history.
+  try{history.replaceState(null,'',location.pathname+location.hash)}catch{}
+  const panel=document.getElementById('huevo-profile');
+  const title=document.getElementById('huevo-player');
+  const ranking=document.getElementById('huevo-ranking');
+  panel.hidden=false;title.textContent='Подключение к huEVO…';
+  try{
+    const response=await fetch('/api/huevo/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query})});
+    if(!response.ok)throw Error('Ошибка проверки параметров запуска');
+    const result=await response.json();
+    const token=result.token; // in-memory only, never localStorage
+    window.snakeHuevoFriendsRequest=(playerToken)=>fetch('/api/huevo/friends',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({token:playerToken})}); // session stays in closure
+    title.textContent='Игрок huEVO: '+result.user.name;
+    const ranked=await fetch('/api/huevo/leaderboard',{headers:{Authorization:'Bearer '+token}});
+    if(ranked.ok){const data=await ranked.json();ranking.replaceChildren();for(const p of data.players.slice(0,5)){const card=document.createElement('span');card.className='rank-card';card.textContent=p.name+' · '+p.score;ranking.append(card)}}
+    // Do not automatically upload local scores or wallet: game actions require server-side validation first.
+  }catch(e){title.textContent='Вход huEVO не подтверждён. Игра доступна локально.'}
+})();
+</script>
+
+<script>
+// SDK controls are deliberately independent from verified server identity.
+// huEVO SDK calls can control the parent interface, but do NOT authenticate players.
+(() => {
+  const panel=document.getElementById('huevo-sdk-panel');
+  const feedback=document.getElementById('sdk-feedback');
+  const selected=document.getElementById('sdk-picked');
+  const btnPick=document.getElementById('sdk-pick');
+  const btnShare=document.getElementById('sdk-share');
+  const btnFriends=document.getElementById('sdk-friends');
+  const btnFull=document.getElementById('sdk-fullscreen');
+  const show=(msg)=>{feedback.textContent=msg};
+  if(!window.huevo || !window.parent || window.parent===window)return;
+  const huevo=window.huevo;
+  // Do not assume signed query alone grants login. /api/huevo/login checks the signature.
+  if(!window.snakeHuevoLaunchDetected && !new URLSearchParams(location.search).has('hu_hash'))return;
+  panel.hidden=false;
+  const humanError=e=>({not_embedded:'Открой игру внутри huEVO.',timeout:'huEVO не ответил. Попробуй ещё раз.',not_allowed:'Действие отклонено.',rate_limited:'Подожди перед следующим запросом.',unsupported:'Функция не поддерживается.'}[e?.code]||'Не удалось выполнить действие.');
+  const exec=async(fn,button)=>{
+    button.disabled=true;
+    try {await fn()} catch(e) {show(humanError(e))} finally {button.disabled=false}
+  };
+  // init data is UI metadata only. Not verified identity.
+  huevo.on('pause',()=>{
+    const pause=document.getElementById('pause');
+    if(pause && !pause.disabled && pause.textContent.includes('Пауза'))pause.click();
+  });
+  // Do not auto-resume: user must choose to continue.
+  huevo.on('resume',()=>show('Вернулись в игру. Нажми «Продолжить», если игра на паузе.'));
+  Promise.resolve(huevo.init()).then(({mode})=>show('SDK подключён · режим '+(mode==='test'?'тестовый':'обычный'))).catch(e=>show(humanError(e)));
+  btnShare.addEventListener('click',()=>exec(async()=>{
+    const result=await huevo.share();show(result?.shared?'Ссылка отправлена через huEVO.':'Поделиться отменено.');
+  },btnShare));
+  btnFull.addEventListener('click',()=>exec(async()=>{
+    const result=await huevo.fullscreen();show(result?.fullscreen?'Полноэкранный режим включён.':'Режим не включён.');
+  },btnFull));
+  btnFriends.addEventListener('click',()=>exec(async()=>{
+    if(typeof window.snakeHuevoFriendsRequest!=='function')throw {code:'not_allowed'};
+    const grant=await huevo.requestAccess(['friends']);
+    try{
+      const res=await window.snakeHuevoFriendsRequest(grant.token);
+      if(!res.ok){const e=await res.json().catch(()=>null);show(e?.error?.message||'Ошибка списка друзей');return;}
+      const data=await res.json();
+      const players=Array.isArray(data.players)?data.players:[];
+      selected.replaceChildren();
+      for(const [i,u] of players.entries()){
+        const li=document.createElement('li');
+        li.textContent=(i+1)+'. '+String(u.name||'Игрок huEVO').slice(0,100)+' — '+String(u.score||0)+' очков';
+        selected.append(li);
+      }
+      if(!players.length){const li=document.createElement('li');li.textContent='Среди первых 100 друзей, игравших в Snake, пока нет сохранённых рекордов.';selected.append(li);}
+      show('Рейтинг друзей: '+players.length+' игроков с рекордами. Найдено '+Number(data.total||0)+' друзей, запускавших приложение. Результаты пока не защищены от накрутки.');
+    }finally{grant.token=null;}
+  },btnFriends));
+  btnPick.addEventListener('click',()=>exec(async()=>{
+    const result=await huevo.pickFriends({max:10});
+    selected.replaceChildren();
+    const users=Array.isArray(result?.users)?result.users:[];
+    for(const u of users){const li=document.createElement('li');li.textContent=String(u.display_name||u.username||u.name||'Игрок huEVO').slice(0,100);selected.append(li)}
+    show(users.length?'Выбрано друзей: '+users.length+'. Это выбор в диалоге huEVO, не автоматический доступ к их рекордам.':'Друзья не выбраны.');
+  },btnPick));
+})();
+</script>
+</body>
+</html>
