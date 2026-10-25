@@ -37,7 +37,7 @@ const server=http.createServer(async(req,res)=>{
    res.writeHead(204);return res.end();
  }
  const url=new URL(req.url,'http://localhost');
- if(req.method==='GET'&&url.pathname==='/health')return json(res,200,{ok:true,service:'snake-api'});
+ if(req.method==='GET'&&url.pathname==='/health')return json(res,200,{ok:true,service:'snake-api',storage:process.env.DATABASE_URL?'postgresql':'ephemeral'});
  if(url.pathname.startsWith('/api/')){
   if(url.pathname.startsWith('/api/huevo/')){
     // Require a verified launch to create a session. Never accept a user ID sent by the client.
