@@ -6,6 +6,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const {verifyLaunch,issueSession,verifySession}=require('./huevo-auth');
 const {getPublicUser,listFriendsServerOnly}=require('./huevo-api');
+const {createRun,verifyRun}=require('./run-proof');
 const PORT=Number(process.env.PORT||3000);
 const DATA=process.env.DATA_FILE||path.join(__dirname,'data.json');
 const PUBLIC=path.join(__dirname,'public');
@@ -95,16 +96,24 @@ const server=http.createServer(async(req,res)=>{
         return json(res,e.retryAfter?429:502,{ok:false,error:{code:e.code||'upstream_error',message:'Не удалось получить друзей из huEVO'},retryAfter:e.retryAfter||null});
       }
     }
+    if(req.method==='POST'&&url.pathname==='/api/huevo/run/start'){
+      const run=createRun(key);
+      return json(res,200,{ok:true,...run});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/huevo/run/finish'){
+      const b=await body(req);
+      const check=verifyRun(key,b);
+      if(!check.ok)return json(res,400,{ok:false,error:{code:'invalid_run',message:check.reason}});
+      player.best=Math.max(player.best,check.score);
+      persist();
+      return json(res,200,{ok:true,best:player.best,verified:true});
+    }
     if(req.method==='GET'&&url.pathname==='/api/huevo/me')return json(res,200,{ok:true,user:{id:session.id,mode:session.mode,name:player.name,username:player.username,avatar:player.avatar,best:player.best},save:player.save});
-    if(req.method==='GET'&&url.pathname==='/api/huevo/leaderboard')return json(res,200,{ok:true,mode:session.mode,verifiedScores:false,players:Object.entries(db.huevoPlayers).filter(([k])=>k.startsWith(session.mode+':')).sort((a,b)=>b[1].best-a[1].best).slice(0,20).map(([k,v])=>({id:k.slice(session.mode.length+1),name:v.name,avatar:v.avatar,score:v.best}))});
+    if(req.method==='GET'&&url.pathname==='/api/huevo/leaderboard')return json(res,200,{ok:true,mode:session.mode,verifiedScores:true,players:Object.entries(db.huevoPlayers).filter(([k])=>k.startsWith(session.mode+':')).sort((a,b)=>b[1].best-a[1].best).slice(0,20).map(([k,v])=>({id:k.slice(session.mode.length+1),name:v.name,avatar:v.avatar,score:v.best}))});
     if(req.method==='PUT'&&url.pathname==='/api/huevo/save'){
       const b=await body(req);player.save=cleanSave(b.save);persist();return json(res,200,{ok:true});
     }
-    if(req.method==='POST'&&url.pathname==='/api/huevo/score'){
-      const b=await body(req);
-      if(!scoreValid(b.score))return json(res,400,{ok:false,error:{code:'invalid_score',message:'Некорректный счёт'}});
-      player.best=Math.max(player.best,b.score);persist();return json(res,200,{ok:true,best:player.best,verified:false});
-    }
+    if(req.method==='POST'&&url.pathname==='/api/huevo/score')return json(res,410,{ok:false,error:{code:'use_verified_run',message:'Используйте проверяемую игровую партию'}});
     return json(res,404,{ok:false,error:{code:'not_found',message:'Метод не найден'}});
   }
   const {id,p}=user(req,res);
