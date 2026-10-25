@@ -7,17 +7,16 @@ const crypto=require('node:crypto');
 const {verifyLaunch,issueSession,verifySession}=require('./huevo-auth');
 const {getPublicUser,listFriendsServerOnly}=require('./huevo-api');
 const {createRun,verifyRun}=require('./run-proof');
+const {initialize,persist:saveDatabase}=require('./database');
 const PORT=Number(process.env.PORT||3000);
 const DATA=process.env.DATA_FILE||path.join(__dirname,'data.json');
 const PUBLIC=path.join(__dirname,'public');
 let db={players:{},huevoPlayers:{}};
-try{db=JSON.parse(fs.readFileSync(DATA,'utf8'))}catch{}
-db.huevoPlayers ||= {};
 const sessions=new Map(); // temporary guest sessions; stable cookie allows re-entry during this process only
-function persist(){const tmp=DATA+'.tmp';fs.writeFileSync(tmp,JSON.stringify(db,null,2));fs.renameSync(tmp,DATA)}
+async function persist(){await saveDatabase(db)}
 function json(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(body)}
 function getCookie(req,name){const items=(req.headers.cookie||'').split(';').map(s=>s.trim());return items.find(s=>s.startsWith(name+'='))?.slice(name.length+1)}
-function user(req,res){let id=getCookie(req,'snake_guest');if(!id||!/^[a-f0-9]{48}$/.test(id)||!db.players[id]){id=crypto.randomBytes(24).toString('hex');db.players[id]={name:'Гость '+id.slice(0,5),best:0,save:null,friends:[],since:Date.now()};persist();res.setHeader('Set-Cookie','snake_guest='+id+'; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000'+(process.env.NODE_ENV==='production'?'; Secure':''))}return {id,p:db.players[id]}}
+async function user(req,res){let id=getCookie(req,'snake_guest');if(!id||!/^[a-f0-9]{48}$/.test(id)||!db.players[id]){id=crypto.randomBytes(24).toString('hex');db.players[id]={name:'Гость '+id.slice(0,5),best:0,save:null,friends:[],since:Date.now()};await persist();res.setHeader('Set-Cookie','snake_guest='+id+'; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000'+(process.env.NODE_ENV==='production'?'; Secure':''))}return {id,p:db.players[id]}}
 function body(req){return new Promise((resolve,reject)=>{let buf='';req.on('data',c=>{buf+=c;if(buf.length>20000){reject(Error('Too large'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(buf||'{}'))}catch{reject(Error('Bad JSON'))}})})}
 function cleanSave(v){if(!v||typeof v!=='object')return null;const colors=['mint','blue','lavender','peach','rose','gold','palette','rainbow'];const owned=Array.isArray(v.owned)?[...new Set(['mint',...v.owned.filter(x=>colors.includes(x))])]:['mint'];const skinId=colors.includes(v.skinId)&&owned.includes(v.skinId)?v.skinId:'mint';const customColor=typeof v.customColor==='string'&&/^#[0-9a-fA-F]{6}$/.test(v.customColor)?v.customColor:'#7bd9ca';return {wallet:Math.min(100000,Math.max(0,Math.floor(Number(v.wallet)||0))),skinId,owned,customColor}}
 function scoreValid(v){return Number.isSafeInteger(v)&&v>=0&&v<=4000&&v%10===0}
@@ -49,7 +48,7 @@ const server=http.createServer(async(req,res)=>{
         if(!player)return json(res,401,{ok:false,error:{code:'invalid_launch',message:'Неверная или устаревшая подпись huEVO'}});
         const key=player.mode+':'+player.id;
         const prev=db.huevoPlayers[key]||{best:0,save:null};
-        db.huevoPlayers[key]={...prev,name:player.displayName||player.username||'Игрок',username:player.username,avatar:player.avatar};persist();
+        db.huevoPlayers[key]={...prev,name:player.displayName||player.username||'Игрок',username:player.username,avatar:player.avatar};await persist();
         return json(res,200,{ok:true,token:issueSession(player),user:{id:player.id,mode:player.mode,name:db.huevoPlayers[key].name,avatar:player.avatar}});
       })();
       return json(res,429,{ok:false,error:{code:'rate_limited',message:'Повторите вход позже'}});
@@ -105,27 +104,27 @@ const server=http.createServer(async(req,res)=>{
       const check=verifyRun(key,b);
       if(!check.ok)return json(res,400,{ok:false,error:{code:'invalid_run',message:check.reason}});
       player.best=Math.max(player.best,check.score);
-      persist();
+      await persist();
       return json(res,200,{ok:true,best:player.best,verified:true});
     }
     if(req.method==='GET'&&url.pathname==='/api/huevo/me')return json(res,200,{ok:true,user:{id:session.id,mode:session.mode,name:player.name,username:player.username,avatar:player.avatar,best:player.best},save:player.save});
     if(req.method==='GET'&&url.pathname==='/api/huevo/leaderboard')return json(res,200,{ok:true,mode:session.mode,verifiedScores:true,players:Object.entries(db.huevoPlayers).filter(([k])=>k.startsWith(session.mode+':')).sort((a,b)=>b[1].best-a[1].best).slice(0,20).map(([k,v])=>({id:k.slice(session.mode.length+1),name:v.name,avatar:v.avatar,score:v.best}))});
     if(req.method==='PUT'&&url.pathname==='/api/huevo/save'){
-      const b=await body(req);player.save=cleanSave(b.save);persist();return json(res,200,{ok:true});
+      const b=await body(req);player.save=cleanSave(b.save);await persist();return json(res,200,{ok:true});
     }
     if(req.method==='POST'&&url.pathname==='/api/huevo/score')return json(res,410,{ok:false,error:{code:'use_verified_run',message:'Используйте проверяемую игровую партию'}});
     return json(res,404,{ok:false,error:{code:'not_found',message:'Метод не найден'}});
   }
-  const {id,p}=user(req,res);
+  const {id,p}=await user(req,res);
   if(limited(id))return json(res,429,{error:'Слишком много запросов'});
   if(req.method==='GET'&&url.pathname==='/api/me')return json(res,200,{id:id.slice(0,10),name:p.name,best:p.best,save:p.save,mode:'guest-demo',friendCode:id.slice(0,10)});
   if(req.method==='GET'&&url.pathname==='/api/leaderboard')return json(res,200,{mode:'demo-unverified',players:Object.entries(db.players).sort((a,b)=>b[1].best-a[1].best).slice(0,20).map(([key,p])=>({name:p.name,score:p.best,code:key.slice(0,10)}))});
   if(req.method==='GET'&&url.pathname==='/api/friends')return json(res,200,{mode:'demo-manual-friends',players:p.friends.map(code=>Object.entries(db.players).find(([k])=>k.startsWith(code))).filter(Boolean).map(([key,v])=>({name:v.name,score:v.best,code:key.slice(0,10)})).sort((a,b)=>b.score-a.score)});
   if(req.method==='GET'&&url.pathname==='/api/save')return json(res,200,{save:p.save});
-  if(req.method==='POST'&&url.pathname==='/api/profile'){const b=await body(req);if(typeof b.name!=='string'||b.name.trim().length<2||b.name.length>24)return json(res,400,{error:'Имя: от 2 до 24 символов'});p.name=b.name.trim().replace(/[<>]/g,'');persist();return json(res,200,{ok:true,name:p.name})}
-  if(req.method==='POST'&&url.pathname==='/api/score'){const b=await body(req);if(!scoreValid(b.score))return json(res,400,{error:'Некорректный счёт'});p.best=Math.max(p.best,b.score);persist();return json(res,200,{ok:true,best:p.best,verified:false})}
-  if(req.method==='PUT'&&url.pathname==='/api/save'){const b=await body(req);p.save=cleanSave(b.save);persist();return json(res,200,{ok:true})}
-  if(req.method==='POST'&&url.pathname==='/api/friends'){const b=await body(req);if(!/^[a-f0-9]{10}$/.test(b.code||''))return json(res,400,{error:'Неверный код'});const peer=Object.keys(db.players).find(k=>k.startsWith(b.code));if(!peer||peer===id)return json(res,404,{error:'Друг не найден'});p.friends=[...new Set([...p.friends,b.code])].slice(0,50);persist();return json(res,200,{ok:true})}
+  if(req.method==='POST'&&url.pathname==='/api/profile'){const b=await body(req);if(typeof b.name!=='string'||b.name.trim().length<2||b.name.length>24)return json(res,400,{error:'Имя: от 2 до 24 символов'});p.name=b.name.trim().replace(/[<>]/g,'');await persist();return json(res,200,{ok:true,name:p.name})}
+  if(req.method==='POST'&&url.pathname==='/api/score'){const b=await body(req);if(!scoreValid(b.score))return json(res,400,{error:'Некорректный счёт'});p.best=Math.max(p.best,b.score);await persist();return json(res,200,{ok:true,best:p.best,verified:false})}
+  if(req.method==='PUT'&&url.pathname==='/api/save'){const b=await body(req);p.save=cleanSave(b.save);await persist();return json(res,200,{ok:true})}
+  if(req.method==='POST'&&url.pathname==='/api/friends'){const b=await body(req);if(!/^[a-f0-9]{10}$/.test(b.code||''))return json(res,400,{error:'Неверный код'});const peer=Object.keys(db.players).find(k=>k.startsWith(b.code));if(!peer||peer===id)return json(res,404,{error:'Друг не найден'});p.friends=[...new Set([...p.friends,b.code])].slice(0,50);await persist();return json(res,200,{ok:true})}
   return json(res,404,{error:'Неизвестный метод'});
  }
  if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
@@ -134,4 +133,4 @@ const server=http.createServer(async(req,res)=>{
  fs.readFile(file,(err,data)=>{if(err){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','x-content-type-options':'nosniff'});res.end(data)});
  }catch(e){json(res,400,{error:'Некорректный запрос'})}
 });
-server.listen(PORT,()=>console.log(`Snake demo running at http://localhost:${PORT}`));
+initialize().then(state=>{db=state;server.listen(PORT,()=>console.log(`Snake API listening on ${PORT}`))}).catch(error=>{console.error('Database initialization failed:',error);process.exit(1)});
