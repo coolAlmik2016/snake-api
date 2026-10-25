@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {verifyLaunch,issueSession,verifySession}=require('./huevo-auth');
-const {getPublicUser,listFriendsServerOnly}=require('./huevo-api');
+const {apiRequest,getPublicUser,listFriendsServerOnly}=require('./huevo-api');
 const {createRun,verifyRun}=require('./run-proof');
 const {initialize,persist:saveDatabase}=require('./database');
 const economy=require('./economy');
@@ -67,6 +67,16 @@ const server=http.createServer(async(req,res)=>{
     const player=db.huevoPlayers[key];
     if(!player)return json(res,401,{ok:false,error:{code:'unauthorized',message:'Сессия не найдена'}});
     if(limited('hu:'+key))return json(res,429,{ok:false,error:{code:'rate_limited',message:'Слишком много запросов'}});
+    if(req.method==='GET'&&url.pathname==='/api/huevo/donations/status'){
+      try{
+        const wallet=await apiRequest('GET','/wallet');
+        // Do not expose application wallet balance to arbitrary players.
+        return json(res,200,{ok:true,frozen:wallet.frozen===true,paymentsConfigured:false,mode:session.mode});
+      }catch(err){
+        console.warn('huEVO wallet status unavailable:',err.code||err.message);
+        return json(res,502,{ok:false,error:{code:'wallet_unavailable',message:'Статус кошелька huEVO сейчас недоступен'}});
+      }
+    }
     const profileMatch=/^\/api\/huevo\/public-profile\/(\d+)$/.exec(url.pathname);
     if(req.method==='GET'&&profileMatch){
       try{
