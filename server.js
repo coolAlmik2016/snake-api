@@ -120,34 +120,6 @@ const server=http.createServer(async(req,res)=>{
       }
     }
     // Owner-only read/preview panel; intentionally does not execute any wallet transfer.
-    if(url.pathname.startsWith('/api/huevo/owner/')){
-      const ownerId=String(process.env.HUEVO_OWNER_USER_ID||'');
-      if(!/^\d+$/.test(ownerId)||ownerId==='0'||session.mode!=='live'||session.id!==ownerId)
-        return json(res,403,{ok:false,error:{code:'not_owner',message:'Доступ только владельцу приложения'}});
-      if(req.method==='GET'&&url.pathname==='/api/huevo/owner/summary'){
-        try{
-          const w=await apiRequest('GET','/wallet');
-          return json(res,200,{ok:true,balance:Number.isSafeInteger(w.balance)?w.balance:null,frozen:w.frozen===true,payoutsEnabled:false});
-        }catch(e){
-          return json(res,502,{ok:false,error:{code:'wallet_unavailable',message:'Не удалось получить баланс кошелька'}});
-        }
-      }
-      if(req.method==='POST'&&url.pathname==='/api/huevo/owner/preview'){
-        const b=await body(req);
-        if(!Number.isSafeInteger(b.amount)||b.amount<1||b.amount>100000)
-          return json(res,400,{ok:false,error:{code:'bad_amount',message:'Сумма от 1 до 100 000 монэток'}});
-        try{
-          const w=await apiRequest('GET','/wallet');
-          if(w.frozen===true)return json(res,409,{ok:false,error:{code:'wallet_frozen',message:'Кошелёк заморожен'}});
-          if(!Number.isSafeInteger(w.balance))return json(res,502,{ok:false,error:{code:'unknown_balance',message:'Баланс недоступен'}});
-          if(b.amount>w.balance)return json(res,409,{ok:false,error:{code:'insufficient_wallet',message:'Монэток недостаточно'}});
-          return json(res,200,{ok:true,recipientId:session.id,amount:b.amount,balanceBefore:w.balance,balanceAfter:w.balance-b.amount,simulation:true,payoutsEnabled:false});
-        }catch(e){
-          return json(res,502,{ok:false,error:{code:'wallet_unavailable',message:'Не удалось проверить баланс'}});
-        }
-      }
-      return json(res,404,{ok:false,error:{code:'not_found',message:'Метод не найден'}});
-    }
     const profileMatch=/^\/api\/huevo\/public-profile\/(\d+)$/.exec(url.pathname);
     if(req.method==='GET'&&profileMatch){
       try{
