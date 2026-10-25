@@ -79,9 +79,10 @@ const server=http.createServer(async(req,res)=>{
     }
     if(req.method==='POST'&&url.pathname==='/api/huevo/donations/create'){
       const b=await body(req);
-      const allowed=[5,10,25,50,100];
-      if(!Number.isInteger(b.amount)||!allowed.includes(b.amount))
-        return json(res,400,{ok:false,error:{code:'invalid_amount',message:'Выберите предложенную сумму'}});
+      // huEVO accepts any whole-number donation from 1 to 100000 monетки.
+      // Never trust the amount sent by the browser, even if the UI validates it.
+      if(!Number.isSafeInteger(b.amount)||b.amount<1||b.amount>100000)
+        return json(res,400,{ok:false,error:{code:'invalid_amount',message:'Сумма должна быть целым числом от 1 до 100 000 монэток'}});
       const test=session.mode!=='live'||process.env.HUEVO_REAL_DONATIONS_ENABLED!=='true';
       try{
         // Amount and player identity come from trusted server state, not arbitrary browser input.
