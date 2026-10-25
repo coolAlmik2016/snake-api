@@ -51,9 +51,10 @@ const server=http.createServer(async(req,res)=>{
         if(!player)return json(res,401,{ok:false,error:{code:'invalid_launch',message:'Неверная или устаревшая подпись huEVO'}});
         const key=player.mode+':'+player.id;
         await updatePlayer(()=>{
+          const existing=Boolean(db.huevoPlayers[key]);
           const prev=db.huevoPlayers[key]||{best:0,save:null};
           db.huevoPlayers[key]={...prev,name:player.displayName||player.username||'Игрок',username:player.username,avatar:player.avatar};
-          economy.ensure(db.huevoPlayers[key],!Boolean(db.huevoPlayers[key].createdBeforeUpgrade) && !Boolean(db.huevoPlayers[key].legacyMigrated) && !Boolean(db.huevoPlayers[key].save) && !Boolean(db.huevoPlayers[key].inventory) && !Boolean(db.huevoPlayers[key].best));
+          economy.ensure(db.huevoPlayers[key],!existing);
         });
         return json(res,200,{ok:true,token:issueSession(player),user:{id:player.id,mode:player.mode,name:db.huevoPlayers[key].name,avatar:player.avatar}});
       })();
